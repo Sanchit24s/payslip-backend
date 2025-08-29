@@ -49,7 +49,12 @@ const generateSlip = async (req, res, next) => {
             config.google.sheet_id,
             formattedMonth
         );
-        await generateAllPayslips(data, config.google.sheet_id, formattedMonth);
+
+        if (!data.success) {
+            return res.status(400).json({ success: false, message: data.message });
+        }
+
+        await generateAllPayslips(data.employees, config.google.sheet_id, formattedMonth);
 
         res
             .status(200)

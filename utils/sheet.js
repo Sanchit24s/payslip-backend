@@ -188,6 +188,13 @@ async function getMergedEmployeeAttendance(sheetId, selectedMonth) {
         getMonthlyAttendance(sheetId, selectedMonth),
     ]);
 
+    if (!attendance || attendance.length === 0) {
+        return {
+            success: false,
+            message: `Attendance data are not present for ${selectedMonth}`,
+        };
+    }
+
     const attendanceMap = Object.fromEntries(
         attendance.map((a) => [a["Emp ID"], a])
     );
@@ -195,20 +202,23 @@ async function getMergedEmployeeAttendance(sheetId, selectedMonth) {
     const workingDays = calculateWorkingDays(selectedMonth);
     const formattedMonth = moment(selectedMonth, "M/YYYY").format("MMMM - YYYY");
 
-    return employees.map((emp) => {
-        const att = attendanceMap[emp["Emp ID"]] || {};
-        const leavesTaken = parseInt(att["Leaves Taken"] || "0", 10);
-        const effectiveWorkingDays = workingDays - leavesTaken;
-        const salaryInWords = numberToIndianCurrencyWords(emp["Net Pay"]);
+    return {
+        success: true,
+        employees: employees.map((emp) => {
+            const att = attendanceMap[emp["Emp ID"]] || {};
+            const leavesTaken = parseInt(att["Leaves Taken"] || "0", 10);
+            const effectiveWorkingDays = workingDays - leavesTaken;
+            const salaryInWords = numberToIndianCurrencyWords(emp["Net Pay"]);
 
-        return {
-            ...emp,
-            Month: formattedMonth,
-            Leaves: leavesTaken,
-            "Working Days": effectiveWorkingDays,
-            "Net Pay (Words)": salaryInWords,
-        };
-    });
+            return {
+                ...emp,
+                Month: formattedMonth,
+                Leaves: leavesTaken,
+                "Working Days": effectiveWorkingDays,
+                "Net Pay (Words)": salaryInWords,
+            };
+        }),
+    };
 }
 
 async function updatePayslipData(sheetId, monthLabel, payslipData) {
