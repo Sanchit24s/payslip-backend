@@ -338,4 +338,4 @@ async function generateAllPayslips(data, sheetId, selectedMonth) {
     logger.info(`✅ All payslips processed for ${monthLabel}`);
 }
 
-module.exports = { generateAllPayslips };
+module.exports = { generateAllPayslips, generatePayslip };

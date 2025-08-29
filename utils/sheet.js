@@ -393,6 +393,125 @@ async function getDepartments(sheetId) {
     return departments;
 }
 
+async function getEmployeeWithAttendance(sheetId, empId, selectedMonth) {
+    const sheets = await authorizeGoogleSheets();
+
+    // Fetch Employee row by ID (optimized)
+    const emp = await fetchEmployeeById(sheetId, empId);
+    if (!emp) throw new Error(`Employee ${empId} not found`);
+
+    // Fetch Monthly_Attendance row just for that emp + month
+    const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: sheetId,
+        range: "Monthly_Attendance!A:Z", // full attendance sheet
+    });
+
+    const [headers, ...rows] = response.data.values;
+    const monthIdx = headers.indexOf("Month");
+    const empIdx = headers.indexOf("Employee Code");
+    if (monthIdx === -1 || empIdx === -1) {
+        throw new Error("Sheet missing Month or Employee Code column");
+    }
+
+    const attendanceRow = rows.find(
+        (r) => r[empIdx] === empId && r[monthIdx] === selectedMonth
+    );
+
+    const attendance = {};
+    if (attendanceRow) {
+        headers.forEach((h, i) => (attendance[h] = attendanceRow[i] || ""));
+    }
+
+    // Calculate working days & net pay words
+    const workingDays = calculateWorkingDays(selectedMonth);
+    const leaves = parseInt(attendance["Leaves Taken"] || "0", 10);
+    const effectiveWorkingDays = workingDays - leaves;
+
+    return {
+        ...emp,
+        ...attendance,
+        Month: moment(selectedMonth, "M/YYYY").format("MMMM - YYYY"),
+        Leaves: leaves,
+        "Working Days": effectiveWorkingDays,
+        "Net Pay (Words)": numberToIndianCurrencyWords(emp["Net Pay"]),
+    };
+}
+
+async function getPayslipLink(sheetId, empId, selectedMonth) {
+    const sheets = await authorizeGoogleSheets();
+
+    // Fetch full Monthly_Attendance sheet
+    const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: sheetId,
+        range: "Monthly_Attendance!A:Z", // adjust if sheet has more columns
+    });
+
+    const [headers, ...rows] = response.data.values;
+
+    // Find column indices
+    const empIdIdx = headers.indexOf("Employee Code");
+    const monthIdx = headers.indexOf("Month");
+    const linkIdx = headers.indexOf("Payslip Link");
+
+    if (empIdIdx === -1 || monthIdx === -1 || linkIdx === -1) {
+        throw new Error(
+            "Sheet must contain 'Employee Code', 'Month', and 'Payslip Link' columns"
+        );
+    }
+
+    // Normalize month (so 07/2025 → 7/2025)
+    const normalizedMonth = normalizeMonth(selectedMonth);
+
+    // Find row that matches empId + month
+    const match = rows.find(
+        (r) =>
+            r[empIdIdx]?.toString().trim() === empId.toString().trim() &&
+            r[monthIdx]?.toString().trim() === normalizedMonth
+    );
+
+    if (!match) return null;
+
+    return match[linkIdx] || null;
+}
+
+async function getAllPayslipLinks(sheetId, selectedMonth) {
+    const sheets = await authorizeGoogleSheets();
+
+    // Fetch full Monthly_Attendance sheet
+    const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: sheetId,
+        range: "Monthly_Attendance!A:Z", // adjust if sheet has more columns
+    });
+
+    const [headers, ...rows] = response.data.values;
+
+    // Find column indices
+    const empIdIdx = headers.indexOf("Employee Code");
+    const monthIdx = headers.indexOf("Month");
+    const linkIdx = headers.indexOf("Payslip Link");
+
+    if (empIdIdx === -1 || monthIdx === -1 || linkIdx === -1) {
+        throw new Error(
+            "Sheet must contain 'Employee Code', 'Month', and 'Payslip Link' columns"
+        );
+    }
+
+    // Normalize month (so 07/2025 → 7/2025)
+    const normalizedMonth = normalizeMonth(selectedMonth);
+
+    // Collect all matching rows for this month
+    const matches = rows.filter(
+        (r) => r[monthIdx]?.toString().trim() === normalizedMonth
+    );
+
+    if (!matches.length) return [];
+
+    // Extract all links
+    const links = matches.map((r) => r[linkIdx]).filter(Boolean);
+
+    return links;
+}
+
 module.exports = {
     getEmployeeData,
     getMonthlyAttendance,
@@ -403,4 +522,7 @@ module.exports = {
     fetchEmployeeAttendance,
     getDepartments,
     getEmployeesWithMonthlyStatus,
+    getEmployeeWithAttendance,
+    getPayslipLink,
+    getAllPayslipLinks,
 };
