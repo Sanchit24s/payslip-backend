@@ -30,7 +30,9 @@ const {
     validateMonth,
     formatMonth,
     validateEmpId,
+    getEndOfMonth,
 } = require("../utils/validators");
+const { filterActiveEmployees } = require("../utils/employeeUtils");
 
 // ✅ Generate slips for all employees
 const generateSlip = async (req, res, next) => {
@@ -273,7 +275,7 @@ const getMonthlyStats = async (req, res, next) => {
         const formattedMonth = formatMonth(month);
 
         const sheetId = config.google.sheet_id;
-        const endOfMonth = moment(month, "YYYY-MM").endOf("month");
+        const endOfMonth = getEndOfMonth(month);
 
         // 1️⃣ Fetch attendance & employees in parallel
         const [attendance, employees] = await Promise.all([
@@ -282,13 +284,7 @@ const getMonthlyStats = async (req, res, next) => {
         ]);
 
         // 2️⃣ Active employees (joined on/before end of month)
-        const activeEmployees = employees.filter((emp) =>
-            moment(
-                emp["Date of Joining"],
-                ["DD-MMM-YYYY", "YYYY-MM-DD"],
-                true
-            ).isSameOrBefore(endOfMonth)
-        );
+        const activeEmployees = filterActiveEmployees(employees, endOfMonth);
 
         // 3️⃣ Total salaries (from employee data)
         const totalSalaries = activeEmployees.reduce(

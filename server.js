@@ -5,7 +5,7 @@ const cors = require("cors");
 const morgan = require("morgan");
 const logger = require("./config/logger");
 const config = require("./config/config");
-const router = require("./routes/route");
+const router = require("./routes/index");
 const path = require("path");
 
 

@@ -22,4 +22,14 @@ function formatMonth(month) {
     return `${+monthNum}/${year}`;
 }
 
-module.exports = { validateMonth, validateEmpId, formatMonth };
+const getEndOfMonth = (month) => moment(month, "YYYY-MM").endOf("month");
+
+const displayMonth = (month) => moment(month, "YYYY-MM").format("MMMM YYYY");
+
+module.exports = {
+    validateMonth,
+    validateEmpId,
+    formatMonth,
+    getEndOfMonth,
+    displayMonth,
+};
