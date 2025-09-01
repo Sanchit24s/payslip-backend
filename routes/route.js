@@ -10,18 +10,19 @@ const {
     resendPayslipEmail,
     downloadPayslips,
 } = require("../controllers/controller");
+const { authenticate } = require("../middlewares/authMiddleware");
 
 const router = Router();
 
-router.post("/generate-slip", generateSlip);
-router.post("/generate-slip-by-id", generateSlipByEmpId);
-router.post("/resend-email", resendPayslipEmail);
-router.post("/download-all", downloadPayslips);
-router.get("/employees", getEmployeesData);
-router.get("/employee/:empId", getEmployeeDetail);
+router.post("/generate-slip", authenticate, generateSlip);
+router.post("/generate-slip-by-id", authenticate, generateSlipByEmpId);
+router.post("/resend-email", authenticate, resendPayslipEmail);
+router.post("/download-all", authenticate, downloadPayslips);
+router.get("/employees", authenticate, getEmployeesData);
+router.get("/employee/:empId", authenticate, getEmployeeDetail);
 
-router.get("/stats", getMonthlyStats);
-router.get("/employees-monthly-status", getEmployeesMonthlyStatus);
-router.get("/department", departmentDropdown);
+router.get("/stats", authenticate, getMonthlyStats);
+router.get("/employees-monthly-status", authenticate, getEmployeesMonthlyStatus);
+router.get("/department", authenticate, departmentDropdown);
 
 module.exports = router;

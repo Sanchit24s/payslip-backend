@@ -7,7 +7,7 @@ const errorHandler = require("../middlewares/errorHandler");
 
 const router = Router();
 
-router.use("/", authenticate, payslipRouter);
+router.use("/", payslipRouter);
 router.use("/report", authenticate, reportRouter);
 router.use("/auth", authRouter);
 router.use(errorHandler);
