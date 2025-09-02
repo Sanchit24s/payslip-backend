@@ -33,4 +33,8 @@ app.get("/", (req, res) => {
 
 app.use("/api/v1", router);
 
-module.exports = app;
+const PORT = config.port || 8000;
+
+app.listen(PORT, () => {
+    logger.info(`🚀 Server running locally at http://localhost:${PORT}`);
+});
