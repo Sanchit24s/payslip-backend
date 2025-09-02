@@ -33,8 +33,4 @@ app.get("/", (req, res) => {
 
 app.use("/api/v1", router);
 
-const PORT = config.port;
-
-app.listen(PORT, () => {
-    logger.info(`🚀 Server started on port: ${PORT}`);
-});
+module.exports = app;
