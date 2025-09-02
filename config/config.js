@@ -22,7 +22,14 @@ const config = {
         name: process.env.CLOUD_NAME,
         api_key: process.env.CLOUD_API_KEY,
         api_secret: process.env.CLOUD_API_SECRET,
-    }
+    },
+
+    user: {
+        email: process.env.EMAIL,
+        password: process.env.PASSWORD
+    },
+
+    jwt_secret: process.env.JWT_SECRET,
 
 };
 

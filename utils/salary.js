@@ -120,8 +120,21 @@ function numberToIndianCurrencyWords(num) {
     return words.replace(/\s+/g, " ").trim() + " Rupees Only.";
 }
 
+const calculateSalaryStats = (employees) => {
+    return employees.reduce(
+        (acc, emp) => {
+            acc.totalSalaries += parseFloat(emp["Net Pay"]) || 0;
+            acc.professionalTax += parseFloat(emp["Professional Tax"]) || 0;
+            acc.tds += parseFloat(emp["TDS"]) || 0;
+            return acc;
+        },
+        { totalSalaries: 0, professionalTax: 0, tds: 0 }
+    );
+};
+
 module.exports = {
     calculateWorkingDays,
     calculateSalary,
     numberToIndianCurrencyWords,
+    calculateSalaryStats,
 };

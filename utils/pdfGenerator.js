@@ -2,10 +2,9 @@ const fs = require("fs");
 const path = require("path");
 const { PDFDocument, StandardFonts, rgb } = require("pdf-lib");
 const logger = require("../config/logger");
-const { createSubfolder, uploadPDFToDrive } = require("./googleDrive");
-const { sendPayslipEmail } = require("./sendEmail");
 const { uploadPDFToCloudinary } = require("./cloudinaryUpload");
-const { updatePayslipLinks } = require("./sheet");
+const { updatePayslipData } = require("./sheet");
+const { sendPayslipEmail } = require("./sendEmail");
 
 // Cache template bytes so we don’t read from disk repeatedly
 let cachedTemplateBytes = null;
@@ -260,7 +259,7 @@ async function generatePayslip(employee, outputPath) {
     const pdfBytes = await pdfDoc.save();
 
     if (outputPath) {
-        fs.writeFileSync(outputPath, pdfBytes);
+        // fs.writeFileSync(outputPath, pdfBytes);
         console.log(`Payslip saved to: ${outputPath}`);
     }
 
@@ -280,12 +279,16 @@ async function generateAllPayslips(data, sheetId, selectedMonth) {
         monthLabel.replace(/\s+/g, "_")
     );
     if (!fs.existsSync(outputDir)) {
-        fs.mkdirSync(outputDir, { recursive: true });
+        // fs.mkdirSync(outputDir, { recursive: true });
     }
 
     const limit = pLimit(5); // process 5 at a time
 
-    const payslipLinks = {};
+    const payslipUpdates = {};
+    const today = new Date();
+    const generatedDate = today
+        .toLocaleDateString("en-GB")
+        .replace(/\//g, "/");
 
     await Promise.all(
         payslips.map((emp) =>
@@ -306,26 +309,33 @@ async function generateAllPayslips(data, sheetId, selectedMonth) {
                     );
                     logger.info(`📤 Uploaded: ${uploadResult.secure_url}`);
 
-                    payslipLinks[emp["Employee Code"]] = uploadResult.secure_url;
-
-                    // 3️⃣ Send Email
+                    // Email
+                    let emailSent = false;
                     if (emp["Email"]) {
-                        // await sendPayslipEmail(emp, pdfBuffer);
+                        await sendPayslipEmail(emp, pdfBuffer);
+                        emailSent = true;
                         logger.info(`📧 Payslip emailed to ${emp["Email"]}`);
                     } else {
                         logger.warn(`⚠️ No email for ${emp["Employee Name"]}`);
                     }
+
+                    // Store updates
+                    payslipUpdates[emp["Employee Code"]] = {
+                        link: uploadResult.secure_url,
+                        generatedDate,
+                        emailSent,
+                    };
                 } catch (error) {
-                    logger.error(`❌ Failed for ${emp["Employee Name"]}: ${err.message}`);
+                    logger.error(`❌ Failed for ${emp["Employee Name"]}: ${error.message}`);
                 }
             })
         )
     );
 
     // 4️⃣ Update Google Sheet
-    await updatePayslipLinks(sheetId, selectedMonth, payslipLinks);
+    await updatePayslipData(sheetId, selectedMonth, payslipUpdates);
 
     logger.info(`✅ All payslips processed for ${monthLabel}`);
 }
 
-module.exports = { generateAllPayslips };
+module.exports = { generateAllPayslips, generatePayslip };
