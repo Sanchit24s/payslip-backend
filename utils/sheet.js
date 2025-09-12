@@ -15,6 +15,10 @@ const {
     applyFilters,
     paginate,
     normalizeMonth,
+    findColumnIndices,
+    mapRowsToObjects,
+    ensureColumn,
+    columnToLetter,
 } = require("./googleSheetUtils");
 
 const SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
@@ -41,6 +45,19 @@ async function authorizeGoogleSheets() {
         logger.error("Failed to authorize Google Sheets API", error);
         throw error;
     }
+}
+
+async function fetchSheetWithHeaders(sheetId, range = "A:Z") {
+    const sheets = await authorizeGoogleSheets();
+    const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: sheetId,
+        range,
+    });
+
+    const [headers, ...rows] = response.data.values || [];
+    if (!headers) throw new Error(`No headers found in ${range}`);
+
+    return { headers, rows };
 }
 
 async function fetchSheetData(sheetId, range) {
@@ -157,7 +174,7 @@ async function getEmployeesWithMonthlyStatus(
                 department: emp["Department"],
                 salary: emp["Net Pay"],
                 month: formattedMonth,
-                isSlipGenerated: Boolean(att["Payslip Link"]),
+                paySlipLink: att["Payslip Link"],
                 isEmailSent: att["Email Sent"] === "Yes",
             };
         })
@@ -242,38 +259,9 @@ async function updatePayslipData(sheetId, monthLabel, payslipData) {
         throw new Error("Sheet must contain 'Month' and 'Employee Code' columns");
     }
 
-    // Ensure required columns exist
-    async function ensureColumn(colName) {
-        let colIndex = headers.indexOf(colName);
-        if (colIndex === -1) {
-            headers.push(colName);
-            colIndex = headers.length - 1;
-
-            await sheets.spreadsheets.values.update({
-                spreadsheetId: sheetId,
-                range: "Monthly_Attendance!A1",
-                valueInputOption: "RAW",
-                requestBody: { values: [headers] },
-            });
-
-            logger.info(`Added new '${colName}' column.`);
-        }
-        return colIndex;
-    }
-
-    const payslipColIndex = await ensureColumn("Payslip Link");
-    const dateColIndex = await ensureColumn("Generated Date");
-    const emailColIndex = await ensureColumn("Email Sent");
-
-    // Helper: Convert column index to A1 notation
-    function columnToLetter(col) {
-        let letter = "";
-        while (col >= 0) {
-            letter = String.fromCharCode((col % 26) + 65) + letter;
-            col = Math.floor(col / 26) - 1;
-        }
-        return letter;
-    }
+    const payslipColIndex = await ensureColumn("Payslip Link", headers);
+    const dateColIndex = await ensureColumn("Generated Date", headers);
+    const emailColIndex = await ensureColumn("Email Sent", headers);
 
     // Prepare batch update requests
     const updates = [];
@@ -367,25 +355,16 @@ async function fetchEmployeeById(sheetId, empId) {
 }
 
 async function fetchEmployeeAttendance(sheetId, empId) {
-    const sheets = await authorizeGoogleSheets();
-
-    // Fetch full Monthly_Attendance sheet once
-    const response = await sheets.spreadsheets.values.get({
-        spreadsheetId: sheetId,
-        range: "Monthly_Attendance!A:Z",
-    });
-
-    const [headers, ...rows] = response.data.values;
-    const empIdIndex = headers.indexOf("Employee Code");
-    if (empIdIndex === -1) throw new Error("Missing Employee Code column");
+    const { headers, rows } = await fetchSheetWithHeaders(
+        sheetId,
+        "Monthly_Attendance!A:Z"
+    );
+    const empIdIdx = headers.indexOf("Employee Code");
+    if (empIdIdx === -1) throw new Error("Missing Employee Code column");
 
     return rows
-        .filter((r) => r[empIdIndex]?.toString().trim() === empId.toString().trim())
-        .map((row) => {
-            const record = {};
-            headers.forEach((h, i) => (record[h] = row[i] || ""));
-            return record;
-        });
+        .filter((r) => r[empIdIdx]?.toString().trim() === empId.toString().trim())
+        .map((row) => mapRowsToObjects(headers, [row])[0]);
 }
 
 async function getDepartments(sheetId) {
@@ -448,78 +427,43 @@ async function getEmployeeWithAttendance(sheetId, empId, selectedMonth) {
 }
 
 async function getPayslipLink(sheetId, empId, selectedMonth) {
-    const sheets = await authorizeGoogleSheets();
+    const { headers, rows } = await fetchSheetWithHeaders(
+        sheetId,
+        "Monthly_Attendance!A:Z"
+    );
+    const {
+        "Employee Code": empIdIdx,
+        "Month": monthIdx,
+        "Payslip Link": linkIdx,
+    } = findColumnIndices(headers, ["Employee Code", "Month", "Payslip Link"]);
 
-    // Fetch full Monthly_Attendance sheet
-    const response = await sheets.spreadsheets.values.get({
-        spreadsheetId: sheetId,
-        range: "Monthly_Attendance!A:Z", // adjust if sheet has more columns
-    });
-
-    const [headers, ...rows] = response.data.values;
-
-    // Find column indices
-    const empIdIdx = headers.indexOf("Employee Code");
-    const monthIdx = headers.indexOf("Month");
-    const linkIdx = headers.indexOf("Payslip Link");
-
-    if (empIdIdx === -1 || monthIdx === -1 || linkIdx === -1) {
-        throw new Error(
-            "Sheet must contain 'Employee Code', 'Month', and 'Payslip Link' columns"
-        );
-    }
-
-    // Normalize month (so 07/2025 → 7/2025)
     const normalizedMonth = normalizeMonth(selectedMonth);
 
-    // Find row that matches empId + month
     const match = rows.find(
         (r) =>
             r[empIdIdx]?.toString().trim() === empId.toString().trim() &&
             r[monthIdx]?.toString().trim() === normalizedMonth
     );
 
-    if (!match) return null;
-
-    return match[linkIdx] || null;
+    return match ? match[linkIdx] || null : null;
 }
 
 async function getAllPayslipLinks(sheetId, selectedMonth) {
-    const sheets = await authorizeGoogleSheets();
-
-    // Fetch full Monthly_Attendance sheet
-    const response = await sheets.spreadsheets.values.get({
-        spreadsheetId: sheetId,
-        range: "Monthly_Attendance!A:Z", // adjust if sheet has more columns
-    });
-
-    const [headers, ...rows] = response.data.values;
-
-    // Find column indices
-    const empIdIdx = headers.indexOf("Employee Code");
-    const monthIdx = headers.indexOf("Month");
-    const linkIdx = headers.indexOf("Payslip Link");
-
-    if (empIdIdx === -1 || monthIdx === -1 || linkIdx === -1) {
-        throw new Error(
-            "Sheet must contain 'Employee Code', 'Month', and 'Payslip Link' columns"
-        );
-    }
-
-    // Normalize month (so 07/2025 → 7/2025)
-    const normalizedMonth = normalizeMonth(selectedMonth);
-
-    // Collect all matching rows for this month
-    const matches = rows.filter(
-        (r) => r[monthIdx]?.toString().trim() === normalizedMonth
+    const { headers, rows } = await fetchSheetWithHeaders(
+        sheetId,
+        "Monthly_Attendance!A:Z"
+    );
+    const { "Month": monthIdx, "Payslip Link": linkIdx } = findColumnIndices(
+        headers,
+        ["Month", "Payslip Link"]
     );
 
-    if (!matches.length) return [];
+    const normalizedMonth = normalizeMonth(selectedMonth);
 
-    // Extract all links
-    const links = matches.map((r) => r[linkIdx]).filter(Boolean);
-
-    return links;
+    return rows
+        .filter((r) => r[monthIdx]?.toString().trim() === normalizedMonth)
+        .map((r) => r[linkIdx])
+        .filter(Boolean);
 }
 
 module.exports = {

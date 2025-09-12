@@ -3,6 +3,7 @@ const {
     calculateWorkingDays,
     numberToIndianCurrencyWords,
 } = require("./salary");
+const { authorizeGoogleSheets } = require("./sheet");
 
 // Return empty default response
 function emptyResponse() {
@@ -207,6 +208,54 @@ function buildDetailEmployeeObject(employee, payslipHistory) {
     return detail;
 }
 
+function mapRowsToObjects(headers, rows) {
+    return rows.map(row => {
+        const obj = {};
+        headers.forEach((h, i) => (obj[h] = row[i] || ""));
+        return obj;
+    });
+}
+
+function findColumnIndices(headers, requiredFields) {
+    const indices = {};
+    for (const field of requiredFields) {
+        const idx = headers.indexOf(field);
+        if (idx === -1) throw new Error(`Missing required column: ${field}`);
+        indices[field] = idx;
+    }
+    return indices;
+}
+
+// Ensure required columns exist
+async function ensureColumn(colName, headers) {
+    let colIndex = headers.indexOf(colName);
+    if (colIndex === -1) {
+        headers.push(colName);
+        colIndex = headers.length - 1;
+
+        await sheets.spreadsheets.values.update({
+            spreadsheetId: sheetId,
+            range: "Monthly_Attendance!A1",
+            valueInputOption: "RAW",
+            requestBody: { values: [headers] },
+        });
+
+        logger.info(`Added new '${colName}' column.`);
+    }
+    return colIndex;
+}
+
+// Helper: Convert column index to A1 notation
+function columnToLetter(col) {
+    let letter = "";
+    while (col >= 0) {
+        letter = String.fromCharCode((col % 26) + 65) + letter;
+        col = Math.floor(col / 26) - 1;
+    }
+    return letter;
+}
+
+
 module.exports = {
     emptyResponse,
     mapFieldIndices,
@@ -219,4 +268,8 @@ module.exports = {
     formatMergedAttendance,
     buildPayslipHistory,
     buildDetailEmployeeObject,
+    mapRowsToObjects,
+    findColumnIndices,
+    ensureColumn,
+    columnToLetter,
 };

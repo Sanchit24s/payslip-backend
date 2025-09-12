@@ -33,6 +33,7 @@ const {
     getEndOfMonth,
 } = require("../utils/validators");
 const { filterActiveEmployees } = require("../utils/employeeUtils");
+const { processAllPayslips } = require("../services/payslipService");
 
 // ✅ Generate slips for all employees
 const generateSlip = async (req, res, next) => {
@@ -56,7 +57,11 @@ const generateSlip = async (req, res, next) => {
             return res.status(400).json({ success: false, message: data.message });
         }
 
-        await generateAllPayslips(data.employees, config.google.sheet_id, formattedMonth);
+        await generateAllPayslips(
+            data.employees,
+            config.google.sheet_id,
+            formattedMonth
+        );
 
         res
             .status(200)
@@ -67,6 +72,57 @@ const generateSlip = async (req, res, next) => {
         res.status(500).render("error", {
             message: "An unexpected error occurred while generating payslips.",
         });
+    }
+};
+
+// ✅ Sent all payslip emails
+const sendAllPayslipEmails = async (req, res, next) => {
+    try {
+        const { month } = req.body;
+        const monthCheck = validateMonth(month);
+        if (!monthCheck.valid)
+            return res
+                .status(400)
+                .json({ success: false, message: monthCheck.message });
+
+        const formattedMonth = formatMonth(month);
+
+        const data = await getMergedEmployeeAttendance(
+            config.google.sheet_id,
+            formattedMonth
+        );
+
+        if (!data.success) {
+            return res.status(400).json({ success: false, message: data.message });
+        }
+
+        const links = await getAllPayslipLinks(
+            config.google.sheet_id,
+            formattedMonth
+        );
+        if (!links.length) {
+            return res.status(404).json({
+                success: false,
+                message: "No payslip links found for this month",
+            });
+        }
+
+        // Process all payslips
+        const results = await processAllPayslips(links, formattedMonth);
+
+        // Build summary
+        const sent = results.filter((r) => r.success).length;
+        res.status(200).json({
+            success: true,
+            summary: {
+                total: results.length,
+                sent,
+                failed: results.length - sent,
+            },
+            results,
+        });
+    } catch (error) {
+        return next(error);
     }
 };
 
@@ -401,4 +457,5 @@ module.exports = {
     generateSlipByEmpId,
     resendPayslipEmail,
     downloadPayslips,
+    sendAllPayslipEmails,
 };

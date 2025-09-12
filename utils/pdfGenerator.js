@@ -309,21 +309,10 @@ async function generateAllPayslips(data, sheetId, selectedMonth) {
                     );
                     logger.info(`📤 Uploaded: ${uploadResult.secure_url}`);
 
-                    // Email
-                    let emailSent = false;
-                    if (emp["Email"]) {
-                        await sendPayslipEmail(emp, pdfBuffer);
-                        emailSent = true;
-                        logger.info(`📧 Payslip emailed to ${emp["Email"]}`);
-                    } else {
-                        logger.warn(`⚠️ No email for ${emp["Employee Name"]}`);
-                    }
-
                     // Store updates
                     payslipUpdates[emp["Employee Code"]] = {
                         link: uploadResult.secure_url,
                         generatedDate,
-                        emailSent,
                     };
                 } catch (error) {
                     logger.error(`❌ Failed for ${emp["Employee Name"]}: ${error.message}`);
