@@ -13,7 +13,7 @@ async function generatePayslip(employee, outputPath) {
     if (!cachedTemplateBytes) {
         const templatePath = path.join(
             __dirname,
-            "Payslip_-_Jan'25_-_Template.PDF"
+            "Payslip_-_Jan'25_-_Template.pdf"
         );
         cachedTemplateBytes = fs.readFileSync(templatePath);
     }
