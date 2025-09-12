@@ -229,7 +229,7 @@ const resendPayslipEmail = async (req, res, next) => {
 
         // Send email with PDF
         const [emailResult] = await Promise.allSettled([
-            sendPayslipEmail(empWithData, pdfBuffer),
+            sendPayslipEmail(empWithData.data, pdfBuffer),
         ]);
 
         const emailSent = emailResult.status === "fulfilled";
