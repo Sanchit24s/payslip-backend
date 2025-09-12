@@ -144,11 +144,19 @@ const generateSlipByEmpId = async (req, res, next) => {
         const formattedMonth = formatMonth(month);
 
         // Fetch employee + attendance for that month
-        const empWithData = await getEmployeeWithAttendance(
+        const response = await getEmployeeWithAttendance(
             config.google.sheet_id,
             empId,
             formattedMonth
         );
+
+        if (!response.success) {
+            return res
+                .status(400)
+                .json({ success: false, message: response.message });
+        }
+
+        const empWithData = response.data;
 
         // Generate payslip (single)
         const fileName = `${empWithData["Employee Code"]}_Payslip.pdf`;

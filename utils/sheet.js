@@ -407,6 +407,13 @@ async function getEmployeeWithAttendance(sheetId, empId, selectedMonth) {
         (r) => r[empIdx] === empId && r[monthIdx] === selectedMonth
     );
 
+    if (!attendanceRow) {
+        return {
+            success: false,
+            message: `Attendance data not found for Employee ${empId} for month ${selectedMonth}`,
+        };
+    }
+
     const attendance = {};
     if (attendanceRow) {
         headers.forEach((h, i) => (attendance[h] = attendanceRow[i] || ""));
@@ -417,13 +424,17 @@ async function getEmployeeWithAttendance(sheetId, empId, selectedMonth) {
     const leaves = parseInt(attendance["Leaves Taken"] || "0", 10);
     const effectiveWorkingDays = workingDays - leaves;
 
-    return {
+    const data = {
         ...emp,
         ...attendance,
         Month: moment(selectedMonth, "M/YYYY").format("MMMM - YYYY"),
         Leaves: leaves,
         "Working Days": effectiveWorkingDays,
         "Net Pay (Words)": numberToIndianCurrencyWords(emp["Net Pay"]),
+    };
+    return {
+        success: true,
+        data,
     };
 }
 
