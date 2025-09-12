@@ -174,6 +174,7 @@ async function getEmployeesWithMonthlyStatus(
                 department: emp["Department"],
                 salary: emp["Net Pay"],
                 month: formattedMonth,
+                isSlipGenerated: Boolean(att["Payslip Link"]),
                 paySlipLink: att["Payslip Link"],
                 isEmailSent: att["Email Sent"] === "Yes",
             };
